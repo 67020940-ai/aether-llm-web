@@ -1,100 +1,263 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="th" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AETHER // Local LLM Interface</title>
-  <!-- Tailwind CSS CDN -->
+  <title>Sable • Interactive Workspace</title>
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Three.js CDN -->
+  <!-- Three.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- Marked for Markdown -->
+  <!-- Marked Markdown -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     
     * {
       box-sizing: border-box;
-      font-family: 'Space Grotesk', sans-serif;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    
+
     code, pre {
       font-family: 'JetBrains Mono', monospace !important;
     }
 
     body {
-      background-color: #050508;
-      color: #e2e8f0;
+      background-color: #08080a;
+      color: #f1f1f4;
       overflow: hidden;
+      margin: 0;
+      padding: 0;
+      user-select: none;
     }
 
-    /* Three.js Background Canvas */
+    /* 3D Background Canvas */
     #canvas-container {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
+      inset: 0;
       z-index: 0;
       pointer-events: none;
     }
 
-    /* Glassmorphism */
-    .glass-panel {
-      background: rgba(13, 14, 24, 0.72);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    /* Ambient Spotlight Glow */
+    .ambient-glow {
+      position: fixed;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 700px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(140, 100, 255, 0.12) 0%, rgba(20, 20, 30, 0) 70%);
+      pointer-events: none;
+      z-index: 1;
     }
 
-    .glass-input {
-      background: rgba(20, 22, 38, 0.6);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-    }
-    
-    .glass-input:focus {
-      border-color: rgba(147, 51, 234, 0.6);
-      box-shadow: 0 0 15px rgba(147, 51, 234, 0.25);
+    /* --- ThreeUI Animated Top Dock (Sable Capsule) --- */
+    .sable-dock-wrapper {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 8px;
+      border-radius: 9999px;
+      background: rgba(18, 18, 24, 0.65);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 
+        0 16px 40px -10px rgba(0, 0, 0, 0.8),
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* Glowing Badge */
-    .glow-dot {
-      box-shadow: 0 0 10px #10b981, 0 0 20px #10b981;
+    .sable-dock-wrapper:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+      box-shadow: 
+        0 20px 50px -10px rgba(0, 0, 0, 0.9),
+        0 0 30px rgba(168, 85, 247, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
     }
 
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar {
-      width: 6px;
+    .dock-item {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 9999px;
+      color: #9496a1;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      outline: none;
     }
-    ::-webkit-scrollbar-track {
-      background: transparent;
+
+    .dock-item:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.08);
+      transform: translateY(2px) scale(1.15);
     }
-    ::-webkit-scrollbar-thumb {
+
+    .dock-item.active {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .dock-item .dock-tooltip {
+      position: absolute;
+      top: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%) translateY(-4px);
+      opacity: 0;
+      pointer-events: none;
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: rgba(12, 12, 16, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #f1f1f4;
+      font-size: 11px;
+      font-weight: 500;
+      white-space: nowrap;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .dock-item:hover .dock-tooltip {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .dock-divider {
+      width: 1px;
+      height: 18px;
       background: rgba(255, 255, 255, 0.1);
+      margin: 0 4px;
+    }
+
+    /* Live Status Pill */
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+
+    .status-glow {
+      box-shadow: 0 0 10px #10b981, 0 0 20px rgba(16, 185, 129, 0.4);
+    }
+
+    /* Center Command Card & Chat Box */
+    .center-glass-container {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 680px;
+      height: calc(100vh - 120px);
+      margin: 80px auto 0 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      user-select: text;
+    }
+
+    .messages-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 10px;
+      scroll-behavior: smooth;
+    }
+
+    .message-bubble {
+      animation: messagePop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes messagePop {
+      0% { opacity: 0; transform: translateY(10px) scale(0.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .assistant-card {
+      background: rgba(18, 19, 26, 0.6);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 20px;
+      padding: 18px 22px;
+      color: #e2e4ea;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+      line-height: 1.65;
+    }
+
+    .user-pill {
+      background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+      color: #ffffff;
+      border-radius: 20px 20px 4px 20px;
+      padding: 12px 20px;
+      font-weight: 400;
+      box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3);
+    }
+
+    /* The Sleek Center Input Box */
+    .input-capsule {
+      background: rgba(18, 19, 28, 0.7);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 8px 12px 8px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 
+        0 20px 50px -10px rgba(0, 0, 0, 0.7),
+        0 0 0 1px rgba(255, 255, 255, 0.05);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .input-capsule:focus-within {
+      border-color: rgba(168, 85, 247, 0.5);
+      background: rgba(22, 23, 34, 0.85);
+      box-shadow: 
+        0 24px 60px -10px rgba(0, 0, 0, 0.8),
+        0 0 35px rgba(168, 85, 247, 0.2);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.12);
       border-radius: 9999px;
     }
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.25);
-    }
-    
-    .markdown-content p { margin-bottom: 0.75rem; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+
+    /* Markdown Styling */
+    .markdown-content p { margin-bottom: 0.6rem; }
     .markdown-content pre {
-      background: rgba(0, 0, 0, 0.6);
-      padding: 1rem;
-      border-radius: 0.75rem;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(0, 0, 0, 0.5) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 14px;
       overflow-x: auto;
-      margin: 0.75rem 0;
+      margin: 10px 0;
     }
     .markdown-content code {
-      background: rgba(255, 255, 255, 0.1);
-      padding: 0.2rem 0.4rem;
-      border-radius: 0.3rem;
-      font-size: 0.9em;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.88em;
     }
     .markdown-content pre code {
       background: transparent;
@@ -102,185 +265,189 @@
     }
   </style>
 </head>
-<body class="relative w-screen h-screen flex flex-col justify-between">
+<body>
 
-  <!-- 3D Background Canvas -->
+  <!-- Ambient Glow & 3D Canvas -->
+  <div class="ambient-glow"></div>
   <div id="canvas-container"></div>
 
-  <!-- Header -->
-  <header class="relative z-10 w-full px-6 py-4 flex items-center justify-between border-b border-white/5 backdrop-blur-md bg-black/20">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center font-bold text-white shadow-lg shadow-purple-500/20">
-        3U
-      </div>
-      <div>
-        <h1 class="text-lg font-bold tracking-wider uppercase text-white flex items-center gap-2">
-          Aether <span class="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">vLLM • A100</span>
-        </h1>
+  <!-- 1. THREEUI ANIMATED TOP DOCK (SABLE CAPSULE) -->
+  <nav class="sable-dock-wrapper" id="top-dock">
+    <!-- Brand / Mode Indicator -->
+    <div class="dock-item" id="btn-home">
+      <i data-lucide="compass" class="w-4 h-4"></i>
+      <span class="dock-tooltip">Explore</span>
+    </div>
+
+    <div class="dock-divider"></div>
+
+    <div class="dock-item active" id="btn-chat-view">
+      <i data-lucide="message-square" class="w-4 h-4"></i>
+      <span class="dock-tooltip">Chat Stream</span>
+    </div>
+
+    <div class="dock-item" id="btn-creative">
+      <i data-lucide="sparkles" class="w-4 h-4"></i>
+      <span class="dock-tooltip">Idea Generator</span>
+    </div>
+
+    <div class="dock-item" id="btn-code">
+      <i data-lucide="terminal" class="w-4 h-4"></i>
+      <span class="dock-tooltip">Code Studio</span>
+    </div>
+
+    <div class="dock-divider"></div>
+
+    <!-- Status Indicator Pill -->
+    <div class="status-pill">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 status-glow" id="status-dot"></span>
+      <span class="text-xs text-neutral-300 font-mono tracking-wider" id="status-text">vLLM 14B</span>
+    </div>
+
+    <div class="dock-item" id="btn-settings">
+      <i data-lucide="sliders" class="w-4 h-4"></i>
+      <span class="dock-tooltip">Preferences</span>
+    </div>
+  </nav>
+
+  <!-- 2. CENTER CONTENT & CHAT WORKSPACE -->
+  <main class="center-glass-container">
+    
+    <!-- Messages Scroll Area -->
+    <div class="messages-area space-y-5" id="chat-messages">
+      <!-- Welcome Intro Card -->
+      <div class="text-center my-auto py-16" id="empty-state">
+        <h2 class="text-3xl font-semibold tracking-tight text-white mb-3">
+          Quiet focus, infinite thoughts.
+        </h2>
+        <p class="text-neutral-400 text-sm max-w-md mx-auto leading-relaxed mb-6 font-normal">
+          A minimal interactive workspace powered by localized neural intelligence. What would you like to explore today?
+        </p>
+
+        <!-- Minimal Suggestion Pills -->
+        <div class="flex flex-wrap items-center justify-center gap-2 max-w-lg mx-auto">
+          <button class="prompt-chip px-3.5 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/20 text-xs text-neutral-300 transition">
+            ☕ เล่าเรื่องสถาปัตยกรรมมินิมอลให้ฟังหน่อย
+          </button>
+          <button class="prompt-chip px-3.5 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/20 text-xs text-neutral-300 transition">
+            🌌 อธิบายเวลาและมิติที่ 4
+          </button>
+          <button class="prompt-chip px-3.5 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/20 text-xs text-neutral-300 transition">
+            🎨 ไอเดียคู่สีสำหรับ Dark UI
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Connection Status & Endpoint Setting -->
-    <div class="flex items-center gap-3">
-      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 glow-dot" id="status-dot"></span>
-        <span class="text-slate-300 font-mono" id="status-text">Ready</span>
+    <!-- 3. CENTER FLOATING CHAT INPUT CAPSULE -->
+    <div class="pb-6 px-2">
+      <div class="input-capsule">
+        <div class="text-neutral-500 pl-1">
+          <i data-lucide="command" class="w-4 h-4"></i>
+        </div>
+        <textarea 
+          id="user-input" 
+          rows="1" 
+          placeholder="ถามอะไรก็ได้ หรือพิมพ์คำสั่ง..." 
+          class="w-full bg-transparent text-sm text-white placeholder-neutral-500 outline-none resize-none max-h-32 py-1.5 leading-normal"
+        ></textarea>
+        
+        <button 
+          id="btn-send" 
+          class="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-neutral-200 hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Send"
+        >
+          <i data-lucide="arrow-up" class="w-4 h-4"></i>
+        </button>
       </div>
 
-      <button id="btn-settings" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition text-slate-300 hover:text-white" title="API Settings">
-        <i data-lucide="settings" class="w-4 h-4"></i>
-      </button>
+      <div class="flex items-center justify-between px-3 mt-2.5 text-[11px] text-neutral-500">
+        <span class="tracking-wide">Press <kbd class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-neutral-400 font-mono">Enter</kbd> to transmit</span>
+        <span class="font-mono opacity-60">Sable Dock Edition</span>
+      </div>
     </div>
-  </header>
 
-  <!-- Modal Settings -->
-  <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-    <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-white/10 text-white">
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
+    <div class="assistant-card w-full max-w-md p-6 border border-white/10 text-white rounded-3xl">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold flex items-center gap-2">
-          <i data-lucide="sliders" class="w-5 h-5 text-purple-400"></i> Endpoint Settings
+        <h3 class="text-base font-semibold flex items-center gap-2">
+          <i data-lucide="sliders" class="w-4 h-4 text-purple-400"></i> Workspace Config
         </h3>
-        <button id="btn-close-settings" class="text-slate-400 hover:text-white">
+        <button id="btn-close-settings" class="text-neutral-400 hover:text-white">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
-      <div class="space-y-4 text-sm">
+      <div class="space-y-4 text-xs">
         <div>
-          <label class="block text-slate-400 mb-1">Cloudflare Tunnel URL</label>
-          <input type="text" id="api-url-input" placeholder="https://xxxx.trycloudflare.com/v1" class="w-full glass-input px-3 py-2 rounded-xl text-white outline-none font-mono text-xs">
-          <p class="text-slate-500 text-xs mt-1">วาง URL ที่ได้จาก Colab (ลงท้ายด้วย /v1)</p>
+          <label class="block text-neutral-400 mb-1">Inference API Endpoint</label>
+          <input type="text" id="api-url-input" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono outline-none focus:border-purple-500">
         </div>
         <div>
-          <label class="block text-slate-400 mb-1">Model Name</label>
-          <input type="text" id="model-name-input" value="Qwen/Qwen2.5-14B-Instruct" class="w-full glass-input px-3 py-2 rounded-xl text-white outline-none font-mono text-xs">
+          <label class="block text-neutral-400 mb-1">Target Model</label>
+          <input type="text" id="model-name-input" value="Qwen/Qwen2.5-14B-Instruct" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white font-mono outline-none focus:border-purple-500">
         </div>
-        <button id="btn-save-settings" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-medium transition mt-2 shadow-lg shadow-purple-600/30">
-          บันทึกการตั้งค่า
+        <button id="btn-save-settings" class="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 font-medium transition text-white mt-2 shadow-lg shadow-purple-600/30">
+          Save Settings
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Chat History Container -->
-  <main class="relative z-10 flex-1 overflow-y-auto px-4 py-6 max-w-4xl mx-auto w-full space-y-6" id="chat-messages">
-    <!-- Welcome Card -->
-    <div class="glass-panel rounded-2xl p-6 text-center max-w-lg mx-auto my-12 border border-white/10">
-      <div class="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-white mb-4 shadow-lg shadow-purple-500/30">
-        <i data-lucide="sparkles" class="w-6 h-6"></i>
-      </div>
-      <h2 class="text-xl font-bold text-white mb-2">ยินดีต้อนรับสู่ AETHER Terminal</h2>
-      <p class="text-slate-400 text-sm leading-relaxed mb-4">
-        เชื่อมต่อตรงกับ A100 GPU บน Google Colab ด้วยความเร็วระดับ vLLM. พิมพ์คำถามเพื่อเริ่มต้นใช้งาน
-      </p>
-      <div class="flex flex-wrap gap-2 justify-center">
-        <button class="prompt-chip px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 transition">
-          ✨ อธิบาย Quantum Computing สั้นๆ
-        </button>
-        <button class="prompt-chip px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 transition">
-          🚀 ช่วยเขียนโค้ด Three.js 3D Sphere
-        </button>
-      </div>
-    </div>
-  </main>
-
-  <!-- Input Footer -->
-  <footer class="relative z-10 w-full px-4 py-4 max-w-4xl mx-auto">
-    <div class="glass-panel rounded-2xl p-2 border border-white/10 flex items-end gap-2 shadow-2xl">
-      <textarea 
-        id="user-input" 
-        rows="1" 
-        placeholder="พิมพ์คำถาม หรือข้อความคุยกับ AI..." 
-        class="w-full bg-transparent px-4 py-3 text-sm text-white placeholder-slate-500 outline-none resize-none max-h-32"
-      ></textarea>
-      <button 
-        id="btn-send" 
-        class="p-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-purple-600/30"
-      >
-        <i data-lucide="arrow-up" class="w-5 h-5"></i>
-      </button>
-    </div>
-    <div class="text-center mt-2 text-[11px] text-slate-500 font-mono">
-      Powered by vLLM Engine • Three.js Dynamic Canvas
-    </div>
-  </footer>
-
-  <!-- Scripts: Three.js Background & LLM Logic -->
+  <!-- SCRIPTS -->
   <script>
     // ----------------------------------------------------
-    // 1. THREE.JS 3D INTERACTIVE WIREFRAME / PARTICLE MESH
+    // THREE.JS: Subdued, Organic Wave / Sphere Geometry
     // ----------------------------------------------------
     const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 25;
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 32;
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // Floating 3D Geometric Torus Knot with particle points
-    const geometry = new THREE.TorusKnotGeometry(9, 2.5, 120, 24);
-    
-    // Wireframe Mesh
-    const material = new THREE.MeshBasicMaterial({
-      color: 0x6366f1,
+    // Subtle Icosahedron Wireframe
+    const geometry = new THREE.IcosahedronGeometry(13, 3);
+    const wireframeMat = new THREE.MeshBasicMaterial({
+      color: 0x475569,
       wireframe: true,
       transparent: true,
-      opacity: 0.15
+      opacity: 0.12
     });
-    const torus = new THREE.Mesh(geometry, material);
-    scene.add(torus);
+    const sphere = new THREE.Mesh(geometry, wireframeMat);
+    scene.add(sphere);
 
-    // Points Cloud
-    const pointsMaterial = new THREE.PointsMaterial({
-      color: 0xc084fc,
-      size: 0.08,
-      transparent: true,
-      opacity: 0.6
-    });
-    const points = new THREE.Points(geometry, pointsMaterial);
-    scene.add(points);
-
-    // Ambient floating particles
-    const particlesGeo = new THREE.BufferGeometry();
-    const particlesCount = 300;
-    const posArray = new Float32Array(particlesCount * 3);
-
-    for(let i = 0; i < particlesCount * 3; i++) {
-      posArray[i] = (Math.random() - 0.5) * 60;
-    }
-    particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-    const particlesMat = new THREE.PointsMaterial({
-      size: 0.05,
+    // Subtle Node Points
+    const pointsMat = new THREE.PointsMaterial({
       color: 0x9333ea,
+      size: 0.07,
       transparent: true,
       opacity: 0.4
     });
-    const starField = new THREE.Points(particlesGeo, particlesMat);
-    scene.add(starField);
+    const points = new THREE.Points(geometry, pointsMat);
+    scene.add(points);
 
-    // Mouse Interaction
-    let mouseX = 0;
-    let mouseY = 0;
+    // Mouse Tracking
+    let targetX = 0, targetY = 0;
     window.addEventListener('mousemove', (e) => {
-      mouseX = (e.clientX - window.innerWidth / 2) * 0.0005;
-      mouseY = (e.clientY - window.innerHeight / 2) * 0.0005;
+      targetX = (e.clientX - window.innerWidth / 2) * 0.0003;
+      targetY = (e.clientY - window.innerHeight / 2) * 0.0003;
     });
 
-    // Animation Loop
     function animate() {
       requestAnimationFrame(animate);
-      torus.rotation.x += 0.002;
-      torus.rotation.y += 0.003;
-      points.rotation.x += 0.002;
-      points.rotation.y += 0.003;
+      sphere.rotation.x += 0.001;
+      sphere.rotation.y += 0.0015;
+      points.rotation.x += 0.001;
+      points.rotation.y += 0.0015;
 
-      starField.rotation.y += 0.0004;
-
-      // Gentle mouse parallax
-      scene.rotation.y += (mouseX - scene.rotation.y) * 0.05;
-      scene.rotation.x += (mouseY - scene.rotation.x) * 0.05;
+      scene.rotation.y += (targetX - scene.rotation.y) * 0.04;
+      scene.rotation.x += (targetY - scene.rotation.x) * 0.04;
 
       renderer.render(scene, camera);
     }
@@ -293,21 +460,22 @@
     });
 
     // ----------------------------------------------------
-    // 2. CHAT & vLLM STREAMING INTERACTION
+    // CHAT & LOGIC
     // ----------------------------------------------------
     lucide.createIcons();
 
-    let API_URL = 'https://privacy-translations-photo-durham.trycloudflare.com/v1';
-    let MODEL_NAME = 'Qwen/Qwen2.5-14B-Instruct';
+    let API_URL = localStorage.getItem('vllm_api_url') || 'https://privacy-translations-photo-durham.trycloudflare.com/v1';
+    let MODEL_NAME = localStorage.getItem('vllm_model_name') || 'Qwen/Qwen2.5-14B-Instruct';
     let conversationHistory = [];
 
     const chatContainer = document.getElementById('chat-messages');
+    const emptyState = document.getElementById('empty-state');
     const userInput = document.getElementById('user-input');
     const btnSend = document.getElementById('btn-send');
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
 
-    // Settings Modal Handlers
+    // Settings
     const modal = document.getElementById('settings-modal');
     const btnSettings = document.getElementById('btn-settings');
     const btnCloseSettings = document.getElementById('btn-close-settings');
@@ -337,7 +505,7 @@
       });
     });
 
-    // Auto resize textarea
+    // Auto resize
     userInput.addEventListener('input', () => {
       userInput.style.height = 'auto';
       userInput.style.height = userInput.scrollHeight + 'px';
@@ -354,32 +522,28 @@
 
     async function testConnection() {
       try {
-        statusText.innerText = 'Connecting...';
-        statusDot.className = 'w-2 h-2 rounded-full bg-amber-400 glow-dot';
         const res = await fetch(`${API_URL}/models`);
         if (res.ok) {
           statusText.innerText = 'Online';
-          statusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 glow-dot';
-        } else {
-          throw new Error();
-        }
-      } catch (err) {
-        statusText.innerText = 'Offline / Standby';
-        statusDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+          statusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 status-glow';
+        } else { throw new Error(); }
+      } catch {
+        statusText.innerText = 'Standby';
+        statusDot.className = 'w-2 h-2 rounded-full bg-neutral-500';
       }
     }
     testConnection();
 
     function appendMessage(role, text) {
+      if (emptyState) emptyState.remove();
+
       const msgDiv = document.createElement('div');
-      msgDiv.className = `flex gap-3 ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+      msgDiv.className = `flex gap-3 message-bubble ${role === 'user' ? 'justify-end' : 'justify-start'}`;
 
       const bubble = document.createElement('div');
-      bubble.className = `max-w-[85%] rounded-2xl px-5 py-3.5 text-sm ${
-        role === 'user' 
-          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/20' 
-          : 'glass-panel border border-white/10 text-slate-200 markdown-content'
-      }`;
+      bubble.className = role === 'user' 
+        ? 'user-pill max-w-[80%]' 
+        : 'assistant-card max-w-[90%] markdown-content';
 
       if (role === 'user') {
         bubble.innerText = text;
@@ -401,27 +565,23 @@
       userInput.style.height = 'auto';
       btnSend.disabled = true;
 
-      // Add user message to UI
       appendMessage('user', text);
       conversationHistory.push({ role: 'user', content: text });
 
-      // Create assistant container
       const assistantBubble = appendMessage('assistant', '...');
       let fullResponse = '';
 
       try {
-        statusText.innerText = 'Generating...';
-        statusDot.className = 'w-2 h-2 rounded-full bg-purple-400 animate-ping';
+        statusText.innerText = 'Thinking...';
+        statusDot.className = 'w-2 h-2 rounded-full bg-purple-400 animate-pulse';
 
         const response = await fetch(`${API_URL}/chat/completions`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: MODEL_NAME,
             messages: [
-              { role: 'system', content: 'คุณคือผู้ช่วย AI อัจฉริยะ ตอบคำถามด้วยภาษาไทยที่ถูกต้อง ไพเราะ เป็นธรรมชาติ และกระชับ' },
+              { role: 'system', content: 'คุณคือผู้ช่วยอัจฉริยะ ตอบคำถามด้วยภาษาไทยที่สุภาพ เป็นธรรมชาติ กระชับ และถูกต้องตามหลักการ' },
               ...conversationHistory
             ],
             stream: true,
@@ -431,9 +591,7 @@
           })
         });
 
-        if (!response.ok) {
-          throw new Error(`HTTP Error: ${response.status}`);
-        }
+        if (!response.ok) throw new Error();
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
@@ -446,7 +604,6 @@
 
           sseBuffer += decoder.decode(value, { stream: true });
           const lines = sseBuffer.split('\n');
-          // เก็บเศษบรรทัดสุดท้ายที่ยังไม่สมบูรณ์ไว้ใน buffer
           sseBuffer = lines.pop();
 
           for (const line of lines) {
@@ -465,12 +622,11 @@
 
         conversationHistory.push({ role: 'assistant', content: fullResponse });
         statusText.innerText = 'Online';
-        statusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 glow-dot';
+        statusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 status-glow';
 
-      } catch (error) {
-        console.error(error);
-        assistantBubble.innerHTML = `<span class="text-rose-400">⚠️ ไม่สามารถเชื่อมต่อกับ Colab API ได้ กรุณาตรวจสอบว่า Colab ยังรันอยู่ และใส่ URL ใน Settings ถูกต้อง</span>`;
-        statusText.innerText = 'Error';
+      } catch (err) {
+        assistantBubble.innerHTML = `<span class="text-rose-400">⚠️ ไม่สามารถเชื่อมต่อกับ Inference Engine ได้ กรุณาตรวจสอบ Settings</span>`;
+        statusText.innerText = 'Offline';
         statusDot.className = 'w-2 h-2 rounded-full bg-rose-500';
       } finally {
         btnSend.disabled = false;
