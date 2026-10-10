@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AETHER // Local LLM Interface</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Marked for Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    
+    * {
+      box-sizing: border-box;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    
+    code, pre {
+      font-family: 'JetBrains Mono', monospace !important;
+    }
+
+    body {
+      background-color: #050508;
+      color: #e2e8f0;
+      overflow: hidden;
+    }
+
+    /* Three.js Background Canvas */
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Glassmorphism */
+    .glass-panel {
+      background: rgba(13, 14, 24, 0.72);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+
+    .glass-input {
+      background: rgba(20, 22, 38, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    
+    .glass-input:focus {
+      border-color: rgba(147, 51, 234, 0.6);
+      box-shadow: 0 0 15px rgba(147, 51, 234, 0.25);
+    }
+
+    /* Glowing Badge */
+    .glow-dot {
+      box-shadow: 0 0 10px #10b981, 0 0 20px #10b981;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+    
+    .markdown-content p { margin-bottom: 0.75rem; }
+    .markdown-content pre {
+      background: rgba(0, 0, 0, 0.6);
+      padding: 1rem;
+      border-radius: 0.75rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      overflow-x: auto;
+      margin: 0.75rem 0;
+    }
+    .markdown-content code {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 0.2rem 0.4rem;
+      border-radius: 0.3rem;
+      font-size: 0.9em;
+    }
+    .markdown-content pre code {
+      background: transparent;
+      padding: 0;
+    }
+  </style>
+</head>
+<body class="relative w-screen h-screen flex flex-col justify-between">
+
+  <!-- 3D Background Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- Header -->
+  <header class="relative z-10 w-full px-6 py-4 flex items-center justify-between border-b border-white/5 backdrop-blur-md bg-black/20">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center font-bold text-white shadow-lg shadow-purple-500/20">
+        3U
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-wider uppercase text-white flex items-center gap-2">
+          Aether <span class="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">vLLM • A100</span>
+        </h1>
+      </div>
+    </div>
+
+    <!-- Connection Status & Endpoint Setting -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 glow-dot" id="status-dot"></span>
+        <span class="text-slate-300 font-mono" id="status-text">Ready</span>
+      </div>
+
+      <button id="btn-settings" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition text-slate-300 hover:text-white" title="API Settings">
+        <i data-lucide="settings" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Modal Settings -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-white/10 text-white">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold flex items-center gap-2">
+          <i data-lucide="sliders" class="w-5 h-5 text-purple-400"></i> Endpoint Settings
+        </h3>
+        <button id="btn-close-settings" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="space-y-4 text-sm">
+        <div>
+          <label class="block text-slate-400 mb-1">Cloudflare Tunnel URL</label>
+          <input type="text" id="api-url-input" placeholder="https://xxxx.trycloudflare.com/v1" class="w-full glass-input px-3 py-2 rounded-xl text-white outline-none font-mono text-xs">
+          <p class="text-slate-500 text-xs mt-1">วาง URL ที่ได้จาก Colab (ลงท้ายด้วย /v1)</p>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Model Name</label>
+          <input type="text" id="model-name-input" value="Qwen/Qwen2.5-14B-Instruct" class="w-full glass-input px-3 py-2 rounded-xl text-white outline-none font-mono text-xs">
+        </div>
+        <button id="btn-save-settings" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-medium transition mt-2 shadow-lg shadow-purple-600/30">
+          บันทึกการตั้งค่า
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat History Container -->
+  <main class="relative z-10 flex-1 overflow-y-auto px-4 py-6 max-w-4xl mx-auto w-full space-y-6" id="chat-messages">
+    <!-- Welcome Card -->
+    <div class="glass-panel rounded-2xl p-6 text-center max-w-lg mx-auto my-12 border border-white/10">
+      <div class="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-white mb-4 shadow-lg shadow-purple-500/30">
+        <i data-lucide="sparkles" class="w-6 h-6"></i>
+      </div>
+      <h2 class="text-xl font-bold text-white mb-2">ยินดีต้อนรับสู่ AETHER Terminal</h2>
+      <p class="text-slate-400 text-sm leading-relaxed mb-4">
+        เชื่อมต่อตรงกับ A100 GPU บน Google Colab ด้วยความเร็วระดับ vLLM. พิมพ์คำถามเพื่อเริ่มต้นใช้งาน
+      </p>
+      <div class="flex flex-wrap gap-2 justify-center">
+        <button class="prompt-chip px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 transition">
+          ✨ อธิบาย Quantum Computing สั้นๆ
+        </button>
+        <button class="prompt-chip px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 transition">
+          🚀 ช่วยเขียนโค้ด Three.js 3D Sphere
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Input Footer -->
+  <footer class="relative z-10 w-full px-4 py-4 max-w-4xl mx-auto">
+    <div class="glass-panel rounded-2xl p-2 border border-white/10 flex items-end gap-2 shadow-2xl">
+      <textarea 
+        id="user-input" 
+        rows="1" 
+        placeholder="พิมพ์คำถาม หรือข้อความคุยกับ AI..." 
+        class="w-full bg-transparent px-4 py-3 text-sm text-white placeholder-slate-500 outline-none resize-none max-h-32"
+      ></textarea>
+      <button 
+        id="btn-send" 
+        class="p-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-purple-600/30"
+      >
+        <i data-lucide="arrow-up" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <div class="text-center mt-2 text-[11px] text-slate-500 font-mono">
+      Powered by vLLM Engine • Three.js Dynamic Canvas
+    </div>
+  </footer>
+
+  <!-- Scripts: Three.js Background & LLM Logic -->
+  <script>
+    // ----------------------------------------------------
+    // 1. THREE.JS 3D INTERACTIVE WIREFRAME / PARTICLE MESH
+    // ----------------------------------------------------
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 25;
+
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    // Floating 3D Geometric Torus Knot with particle points
+    const geometry = new THREE.TorusKnotGeometry(9, 2.5, 120, 24);
+    
+    // Wireframe Mesh
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x6366f1,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.15
+    });
+    const torus = new THREE.Mesh(geometry, material);
+    scene.add(torus);
+
+    // Points Cloud
+    const pointsMaterial = new THREE.PointsMaterial({
+      color: 0xc084fc,
+      size: 0.08,
+      transparent: true,
+      opacity: 0.6
+    });
+    const points = new THREE.Points(geometry, pointsMaterial);
+    scene.add(points);
+
+    // Ambient floating particles
+    const particlesGeo = new THREE.BufferGeometry();
+    const particlesCount = 300;
+    const posArray = new Float32Array(particlesCount * 3);
+
+    for(let i = 0; i < particlesCount * 3; i++) {
+      posArray[i] = (Math.random() - 0.5) * 60;
+    }
+    particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    const particlesMat = new THREE.PointsMaterial({
+      size: 0.05,
+      color: 0x9333ea,
+      transparent: true,
+      opacity: 0.4
+    });
+    const starField = new THREE.Points(particlesGeo, particlesMat);
+    scene.add(starField);
+
+    // Mouse Interaction
+    let mouseX = 0;
+    let mouseY = 0;
+    window.addEventListener('mousemove', (e) => {
+      mouseX = (e.clientX - window.innerWidth / 2) * 0.0005;
+      mouseY = (e.clientY - window.innerHeight / 2) * 0.0005;
+    });
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      torus.rotation.x += 0.002;
+      torus.rotation.y += 0.003;
+      points.rotation.x += 0.002;
+      points.rotation.y += 0.003;
+
+      starField.rotation.y += 0.0004;
+
+      // Gentle mouse parallax
+      scene.rotation.y += (mouseX - scene.rotation.y) * 0.05;
+      scene.rotation.x += (mouseY - scene.rotation.x) * 0.05;
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ----------------------------------------------------
+    // 2. CHAT & vLLM STREAMING INTERACTION
+    // ----------------------------------------------------
+    lucide.createIcons();
+
+    let API_URL = 'https://privacy-translations-photo-durham.trycloudflare.com/v1';
+    let MODEL_NAME = 'Qwen/Qwen2.5-14B-Instruct';
+    let conversationHistory = [];
+
+    const chatContainer = document.getElementById('chat-messages');
+    const userInput = document.getElementById('user-input');
+    const btnSend = document.getElementById('btn-send');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+
+    // Settings Modal Handlers
+    const modal = document.getElementById('settings-modal');
+    const btnSettings = document.getElementById('btn-settings');
+    const btnCloseSettings = document.getElementById('btn-close-settings');
+    const btnSaveSettings = document.getElementById('btn-save-settings');
+    const apiUrlInput = document.getElementById('api-url-input');
+    const modelNameInput = document.getElementById('model-name-input');
+
+    apiUrlInput.value = API_URL;
+    modelNameInput.value = MODEL_NAME;
+
+    btnSettings.addEventListener('click', () => modal.classList.remove('hidden'));
+    btnCloseSettings.addEventListener('click', () => modal.classList.add('hidden'));
+    btnSaveSettings.addEventListener('click', () => {
+      API_URL = apiUrlInput.value.trim().replace(/\/+$/, '');
+      MODEL_NAME = modelNameInput.value.trim();
+      localStorage.setItem('vllm_api_url', API_URL);
+      localStorage.setItem('vllm_model_name', MODEL_NAME);
+      modal.classList.add('hidden');
+      testConnection();
+    });
+
+    // Prompt Chips
+    document.querySelectorAll('.prompt-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        userInput.value = chip.innerText.replace(/^[^\w\sก-๙]+/, '').trim();
+        sendMessage();
+      });
+    });
+
+    // Auto resize textarea
+    userInput.addEventListener('input', () => {
+      userInput.style.height = 'auto';
+      userInput.style.height = userInput.scrollHeight + 'px';
+    });
+
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    btnSend.addEventListener('click', sendMessage);
+
+    async function testConnection() {
+      try {
+        statusText.innerText = 'Connecting...';
+        statusDot.className = 'w-2 h-2 rounded-full bg-amber-400 glow-dot';
+        const res = await fetch(`${API_URL}/models`);
+        if (res.ok) {
+          statusText.innerText = 'Online';
+          statusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 glow-dot';
+        } else {
+          throw new Error();
+        }
+      } catch (err) {
+        statusText.innerText = 'Offline / Standby';
+        statusDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+      }
+    }
+    testConnection();
+
+    function appendMessage(role, text) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `flex gap-3 ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = `max-w-[85%] rounded-2xl px-5 py-3.5 text-sm ${
+        role === 'user' 
+          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/20' 
+          : 'glass-panel border border-white/10 text-slate-200 markdown-content'
+      }`;
+
+      if (role === 'user') {
+        bubble.innerText = text;
+      } else {
+        bubble.innerHTML = marked.parse(text);
+      }
+
+      msgDiv.appendChild(bubble);
+      chatContainer.appendChild(msgDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      return bubble;
+    }
+
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text) return;
+
+      userInput.value = '';
+      userInput.style.height = 'auto';
+      btnSend.disabled = true;
+
+      // Add user message to UI
+      appendMessage('user', text);
+      conversationHistory.push({ role: 'user', content: text });
+
+      // Create assistant container
+      const assistantBubble = appendMessage('assistant', '...');
+      let fullResponse = '';
+
+      try {
+        statusText.innerText = 'Generating...';
+        statusDot.className = 'w-2 h-2 rounded-full bg-purple-400 animate-ping';
+
+        const response = await fetch(`${API_URL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: MODEL_NAME,
+            messages: [
+              { role: 'system', content: 'คุณคือผู้ช่วย AI อัจฉริยะ ตอบคำถามด้วยภาษาไทยที่ถูกต้อง ไพเราะ เป็นธรรมชาติ และกระชับ' },
+              ...conversationHistory
+            ],
+            stream: true,
+            temperature: 0.3,
+            repetition_penalty: 1.05,
+            max_tokens: 2048
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP Error: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        assistantBubble.innerHTML = '';
+        let sseBuffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split('\n');
+          // เก็บเศษบรรทัดสุดท้ายที่ยังไม่สมบูรณ์ไว้ใน buffer
+          sseBuffer = lines.pop();
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
+              try {
+                const data = JSON.parse(trimmed.slice(6));
+                const token = data.choices[0]?.delta?.content || '';
+                fullResponse += token;
+                assistantBubble.innerHTML = marked.parse(fullResponse);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+              } catch (e) {}
+            }
+          }
+        }
+
+        conversationHistory.push({ role: 'assistant', content: fullResponse });
+        statusText.innerText = 'Online';
+        statusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 glow-dot';
+
+      } catch (error) {
+        console.error(error);
+        assistantBubble.innerHTML = `<span class="text-rose-400">⚠️ ไม่สามารถเชื่อมต่อกับ Colab API ได้ กรุณาตรวจสอบว่า Colab ยังรันอยู่ และใส่ URL ใน Settings ถูกต้อง</span>`;
+        statusText.innerText = 'Error';
+        statusDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+      } finally {
+        btnSend.disabled = false;
+        userInput.focus();
+      }
+    }
+  </script>
+</body>
+</html>
